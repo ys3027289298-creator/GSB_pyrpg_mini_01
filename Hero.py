@@ -134,26 +134,37 @@ class Hero:
 
     # adds XP to character, and levels up if it goes over
     def addxp(self, gainedxp):
-        gainedxp = gainedxp + (gainedxp * self.defcurve)
-        centerprint('You gained ' + str(int(gainedxp)) + ' Exp')
-        self.xp += int(gainedxp)
+        gainedxp = int(gainedxp + (gainedxp * self.defcurve))
+        centerprint('You gained ' + str(gainedxp) + ' Exp')
+        self.xp += gainedxp
         if self.xp >= self.nextlevel:
             self.levelup()
 
     # adds gold to character
     def addgold(self, gainedgold):
-        gainedgold = gainedgold + (gainedgold * self.defcurve)
-        centerprint('You gained ' + str(int(gainedgold + (gainedgold * self.defcurve))) + ' Gold')
-        self.gold += int(gainedgold + (gainedgold * self.defcurve))
+        gainedgold = int(gainedgold + (gainedgold * self.defcurve))
+        centerprint('You gained ' + str(gainedgold) + ' Gold')
+        self.gold += gainedgold
 
     # attempt to buy an item
-    def buyitem(self, item):
-        if self.canafford(item.val):
-            self.gold -= item.val
-            self.items.append(item)
+    def buyitem(self, item, price=None):
+        if price is None:
+            price = item.val
+        if self.canafford(price):
+            self.gold -= price
+            self.additem(item)
             print('You bought ' + item.name)
         else:
             print('You can\'t afford that!')
+
+    # adds an item to the inventory, stacking identical items
+    def additem(self, item):
+        for held in self.items:
+            if (held.name == item.name and held.grade == item.grade
+                    and held.effect == item.effect):
+                held.count += item.count
+                return
+        self.items.append(item)
 
     # see if you can afford an item
     def canafford(self, val):
@@ -321,7 +332,28 @@ class Hero:
         ournewitem = Item.Item(new_item_data[0], new_item_data[1], new_item_data[2], new_item_data[3], new_item_data[4])
         return ournewitem
 
+    # equips a piece of gear ('weapon', 'armor' or 'shield') and recomputes stats
+    def equip(self, slot, gear):
+        if slot == 'weapon':
+            self.ourweapon = gear
+        elif slot == 'armor':
+            self.ourarmor = gear
+        elif slot == 'shield':
+            self.ourshield = gear
+        else:
+            raise ValueError('unknown gear slot: ' + str(slot))
+        self.applyequip()
+
+    # removes a piece of gear and recomputes stats
+    def unequip(self, slot):
+        self.equip(slot, None)
+
     # re-equips all gear. Usually called when setting something like self.ourarmor = Armor.Armor(*args)
+    # stats are always recomputed from the base stats plus the currently equipped gear,
+    # so replacing or removing gear never stacks bonuses
     def applyequip(self):
-        self.atk = int(self.baseatk + self.ourweapon.baseatk)
-        self.defn = int(self.basedef + self.ourarmor.defn + self.ourshield.defn)
+        weaponatk = self.ourweapon.atk if self.ourweapon is not None else 0
+        armordef = self.ourarmor.defn if self.ourarmor is not None else 0
+        shielddef = self.ourshield.defn if self.ourshield is not None else 0
+        self.atk = int(self.baseatk + weaponatk)
+        self.defn = int(self.basedef + armordef + shielddef)

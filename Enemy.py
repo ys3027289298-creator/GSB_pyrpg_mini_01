@@ -15,6 +15,8 @@ class Enemy:
         self.hp = self.maxhp
         self.defn = enemydefn
         self.effect = enemystatuseffect
+        # set when the enemy fled instead of being killed (no loot then)
+        self.hasrun = False
 
     # Heals user up to max health
     def heal(self, hpup):
@@ -35,6 +37,7 @@ class Enemy:
     # resets enemy to max HP (done after a fight)
     def reset(self):
         self.hp = self.maxhp
+        self.hasrun = False
 
     # check if enemy is alive
     def isalive(self):
@@ -43,8 +46,9 @@ class Enemy:
         else:
             return False
 
-    # enemy running away awards normal XP/Gold to hero for now
+    # enemy running away leaves the battle without dropping XP/Gold
     def run(self):
+        self.hasrun = True
         self.hp = 0
 
     # enemy could get stronger

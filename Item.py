@@ -9,6 +9,8 @@ class Item:
         self.name = itemname
         self.effect = itemeffect
         self.val = itemvalue
+        # how many of this item are stacked in one inventory slot
+        self.count = 1
 
     # prints all item stats
     def printiteminfo(self):

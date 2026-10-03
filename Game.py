@@ -49,11 +49,24 @@ class Game:
             centerprint('We must load the database first')
             centerprint('This will only take a moment...')
             firsttime = True
+        else:
+            # a failed or interrupted setup can leave a partial database behind
+            try:
+                checkdb = connect('./db/game.db')
+                tables = set(row[0] for row in checkdb.cursor().execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table';"))
+                checkdb.close()
+            except Exception:
+                tables = set()
+            if not set(dbsetup.dbsetup.TABLES).issubset(tables):
+                centerprint('The game database is incomplete. Reloading it...')
+                firsttime = True
 
         # re-creates the database, in case you change values1
         if firsttime:
             print('Loading Database:')
             oursetup = dbsetup.dbsetup()
+            oursetup.deletedbifexists()
             oursetup.setupdb()
         if self.debugging:
             printtest()
@@ -73,37 +86,37 @@ class Game:
     def newhero(self):
         self.conn.execute('SELECT * FROM levelnotes WHERE level = 1;')
         rows = self.conn.fetchall()
-        marqueeprint('[CHOOSE CLASS]')
-        centerprint('[w]arrior [m]age [h]unter')
-        ourclass = input()
-        if ourclass == 'w' or ourclass == '':
-            ourclass = 'warrior'
-        elif ourclass == 'm':
-            ourclass = 'mage'
-        elif ourclass == 'h':
-            ourclass = 'hunter'
-        else:
-            centerprint('Please enter a valid selection')
-        marqueeprint('[CHOOSE DIFFICULTY]')
-        centerprint('[1]easy [2]med [3]hard')
-        diff = input()
+        ourclass = None
+        while ourclass is None:
+            marqueeprint('[CHOOSE CLASS]')
+            centerprint('[w]arrior [m]age [h]unter')
+            choice = input()
+            if choice == 'w' or choice == '':
+                ourclass = 'warrior'
+            elif choice == 'm':
+                ourclass = 'mage'
+            elif choice == 'h':
+                ourclass = 'hunter'
+            else:
+                centerprint('Please enter a valid selection')
 
         # the harder the difficulty, the less your attack and defense
-        if diff == '1' or diff == '':
-            atkcurve = .2
-            defcurve = .05
-        elif diff == '2':
-            atkcurve = .1
-            defcurve = .1
-        elif diff == '3':
-            atkcurve = .05
-            defcurve = .2
-        else:
-            centerprint('Please enter a valid selection')
-            diff = 1
-            atkcurve = .4
-            defcurve = .05
-            centerprint('Setting Difficulty to ' + str(diff))
+        atkcurve = None
+        while atkcurve is None:
+            marqueeprint('[CHOOSE DIFFICULTY]')
+            centerprint('[1]easy [2]med [3]hard')
+            diff = input()
+            if diff == '1' or diff == '':
+                atkcurve = .2
+                defcurve = .05
+            elif diff == '2':
+                atkcurve = .1
+                defcurve = .1
+            elif diff == '3':
+                atkcurve = .05
+                defcurve = .2
+            else:
+                centerprint('Please enter a valid selection')
 
         new_hero_data = rows[0]
         ournewhero = Hero.Hero(ourclass,
@@ -162,18 +175,18 @@ class Game:
                 marqueeprint('[FOUND ITEM]')
                 itemrand = random.randrange(0, 6)
                 if itemrand == 0:
-                    self.ourhero.ourarmor = self.ourhero.newarmor()
+                    self.ourhero.equip('armor', self.ourhero.newarmor())
                     gridoutput(self.ourhero.ourarmor.datadict())
                 elif itemrand == 1:
-                    self.ourhero.ourweapon = self.ourhero.newweapon()
+                    self.ourhero.equip('weapon', self.ourhero.newweapon())
                     gridoutput(self.ourhero.ourweapon.datadict())
                 elif itemrand == 2:
-                    self.ourhero.ourshield = self.ourhero.newshield()
+                    self.ourhero.equip('shield', self.ourhero.newshield())
                     gridoutput(self.ourhero.ourshield.datadict())
                 elif 3 <= itemrand <= 6:
                     self.ourhero.ouritem = self.ourhero.newitem()
                     gridoutput(self.ourhero.ouritem.datadict())
-                    self.ourhero.items.append(self.ourhero.ouritem)
+                    self.ourhero.additem(self.ourhero.ouritem)
                 self.ourhero.applyequip()
             elif 90 < ourrand <= 95:
                 marqueeprint('A LONE TRAVELER')
@@ -233,10 +246,17 @@ class Game:
             return
         if not self.ourenemy.isalive():
             self.ourhero.isbattling = False
+            if self.ourenemy.hasrun:
+                # a fled enemy drops nothing
+                self.ourenemy.reset()
+                marqueeprint('[ENEMY FLED]')
+                centerprint('Press [Enter] To continue')
+                wait = input()
+                return
             self.ourenemy.reset()
             marqueeprint('[VICTORY]')
-            self.ourhero.addgold(self.ourenemy.gold + (self.ourenemy.gold * self.ourhero.defcurve))
-            self.ourhero.addxp(self.ourenemy.xp + (self.ourenemy.xp * self.ourhero.defcurve))
+            self.ourhero.addgold(self.ourenemy.gold)
+            self.ourhero.addxp(self.ourenemy.xp)
             # 15% chance to get some health back.
             if random.randrange(0, 100) in range(0, 15):
                 self.ourhero.food()
@@ -302,7 +322,7 @@ class Game:
     # One round of an enemy turn
     def enemyturn(self):
         overunder = random.randrange(0, 20)
-        if self.ourenemy.isalive:
+        if self.ourenemy.isalive():
             marqueeprint('[ENEMY ATTACK]')
             if overunder == 0:
                 self.ourenemy.anger()
@@ -310,7 +330,7 @@ class Game:
                 self.ourenemy.weaker()
             elif overunder == 2:
                 centerprint(str(self.ourenemy.name) + ' ran away!')
-                self.ourenemy.hp = 0
+                self.ourenemy.run()
                 self.ourhero.isbattling = False
                 return
             if overunder in range(3, self.ourhero.dodge):
@@ -375,8 +395,7 @@ class Game:
                                    rows[4][3]))
         # part of random name
         ournewenemy = Enemy.Enemy(new_enemy[0], levelname, adjective, enemyname, new_enemy[4],
-                                  new_enemy[5], (new_enemy[6] + (new_enemy[6] * self.ourhero.defcurve)),
-                                  new_enemy[7], new_enemy[8], new_enemy[9])
+                                  new_enemy[5], new_enemy[6], new_enemy[7], new_enemy[8], new_enemy[9])
         return ournewenemy
 
     # a blacksmith who can repair or sell gear
@@ -408,7 +427,7 @@ class Game:
                 decision2 = input()
                 if decision2 == 'y' and self.ourhero.gold >= repaircost:
                     self.ourhero.gold -= repaircost
-                    self.ourhero.ourweapon.dur = self.ourhero.ourweapon.maxdur
+                    self.ourhero.ourweapon.repair()
                     centerprint('Repair Success.')
             if decision == '2' or decision == 'a':
                 repaircost = self.ourhero.ourshield.maxdur - self.ourhero.ourshield.dur
@@ -418,7 +437,7 @@ class Game:
                 decision2 = input()
                 if decision2 == 'y' and self.ourhero.gold >= repaircost:
                     self.ourhero.gold -= repaircost
-                    self.ourhero.ourshield.dur = self.ourhero.ourshield.maxdur
+                    self.ourhero.ourshield.repair()
                     centerprint('Repair Success.')
             if decision == '3' or decision == 'a':
                 repaircost = self.ourhero.ourarmor.maxdur - self.ourhero.ourarmor.dur
@@ -428,8 +447,9 @@ class Game:
                 decision2 = input()
                 if decision2 == 'y' and self.ourhero.gold >= repaircost:
                     self.ourhero.gold -= repaircost
-                    self.ourhero.ourarmor.dur = self.ourhero.ourarmor.maxdur
+                    self.ourhero.ourarmor.repair()
                     centerprint('Repair Success')
+            self.ourhero.applyequip()
 
         # offer random choice of weapon, armor, or shield at 1.5x value price
         elif nextdecision == 'b':
@@ -444,9 +464,9 @@ class Game:
             print('')
 
             # determine weapon costs
-            wepcost = weaponforsale.level * 60 * self.ourhero.defcurve
-            armcost = armorforsale.level * 60 * self.ourhero.defcurve
-            shcost = shieldforsale.level * 60 * self.ourhero.defcurve
+            wepcost = int(weaponforsale.level * 60 * self.ourhero.defcurve)
+            armcost = int(armorforsale.level * 60 * self.ourhero.defcurve)
+            shcost = int(shieldforsale.level * 60 * self.ourhero.defcurve)
 
             data1 = [str(weaponforsale.name), str(weaponforsale.type),
                      str(weaponforsale.baseatk),
@@ -468,24 +488,25 @@ class Game:
             if itemindex not in ['1', '2', '3', '']:
                 centerprint('Please enter a valid choice')
             elif itemindex == '1':
-                self.ourhero.ourweapon = weaponforsale
-                if self.ourhero.gold < wepcost:
-                    centerprint('You don\'t have enough money!')
-                self.ourhero.gold -= wepcost
-                centerprint('You equip your new gear: ' + str(weaponforsale.name) + ' ' + str(weaponforsale.type))
-            elif itemindex == '2':
-                self.ourhero.ourshield = shieldforsale
-                if self.ourhero.gold < wepcost:
+                if not self.ourhero.canafford(wepcost):
                     centerprint('You don\'t have enough money!')
                     return
-                self.ourhero.gold -= armcost
-                centerprint('You equip your new gear: ' + str(shieldforsale.name) + ' ' + str(shieldforsale.type))
-            elif itemindex == '3':
-                self.ourhero.ourarmor = armorforsale
-                if self.ourhero.gold < shcost:
+                self.ourhero.gold -= wepcost
+                self.ourhero.equip('weapon', weaponforsale)
+                centerprint('You equip your new gear: ' + str(weaponforsale.name) + ' ' + str(weaponforsale.type))
+            elif itemindex == '2':
+                if not self.ourhero.canafford(shcost):
                     centerprint('You don\'t have enough money!')
                     return
                 self.ourhero.gold -= shcost
+                self.ourhero.equip('shield', shieldforsale)
+                centerprint('You equip your new gear: ' + str(shieldforsale.name) + ' ' + str(shieldforsale.type))
+            elif itemindex == '3':
+                if not self.ourhero.canafford(armcost):
+                    centerprint('You don\'t have enough money!')
+                    return
+                self.ourhero.gold -= armcost
+                self.ourhero.equip('armor', armorforsale)
                 centerprint('You equip your new gear: ' + str(armorforsale.name) + ' ' + str(armorforsale.type))
             self.ourhero.applyequip()
             return
@@ -553,19 +574,19 @@ class Game:
             item5 = self.ourhero.newitem()
             itemarray = [item1, item2, item3, item4, item5]
             for i, item in enumerate(itemarray):
-                print(str(i + 1) + '\t' + item.name + '\t' + str(item.val * 1.5))
+                print(str(i + 1) + '\t' + item.name + '\t' + str(int(item.val * 1.5)))
             print('Your selection? (ENTER to go back)')
             selection = input()
             if selection == '1':
-                self.ourhero.buyitem(item1)
+                self.ourhero.buyitem(item1, int(item1.val * 1.5))
             elif selection == '2':
-                self.ourhero.buyitem(item2)
+                self.ourhero.buyitem(item2, int(item2.val * 1.5))
             elif selection == '3':
-                self.ourhero.buyitem(item3)
+                self.ourhero.buyitem(item3, int(item3.val * 1.5))
             elif selection == '4':
-                self.ourhero.buyitem(item4)
+                self.ourhero.buyitem(item4, int(item4.val * 1.5))
             elif selection == '5':
-                self.ourhero.buyitem(item5)
+                self.ourhero.buyitem(item5, int(item5.val * 1.5))
             elif selection == '':
                 centerprint('\"WHYD YOU COME HERE AND NOT BUY ANYTHING?\"')
                 return
@@ -590,7 +611,14 @@ class Game:
             index = 0
         if index == 'c':
             return
-        index = int(index)
+        try:
+            index = int(index)
+        except ValueError:
+            centerprint('Please enter a valid choice')
+            return
+        if index < 0 or index >= len(dirlist):
+            centerprint('Please enter a valid choice')
+            return
         ourpickle = open(('./saves/' + str(dirlist[index])), "rb")
         ourdata = pickle.load(ourpickle)
         return ourdata
@@ -635,15 +663,18 @@ class Game:
         try:
             itemindex = input()
             itemindex = int(itemindex)
-            itemindex -= 1
-            self.ourhero.ouritem = self.ourhero.items[int(itemindex)]
-            del (self.ourhero.items[int(itemindex)])
         except ValueError:
             centerprint('Please enter a valid choice')
             return False
-        except IndexError:
+        if itemindex < 1 or itemindex > len(self.ourhero.items):
             centerprint('Please enter a valid choice')
             return False
+        itemindex -= 1
+        self.ourhero.ouritem = self.ourhero.items[itemindex]
+        if self.ourhero.ouritem.count > 1:
+            self.ourhero.ouritem.count -= 1
+        else:
+            del (self.ourhero.items[itemindex])
         self.ourhero.activeitem = self.ourhero.ouritem
         centerprint('Using ' + str(self.ourhero.ouritem.name))
         if self.ourhero.ouritem.name == 'Healing Potion':
@@ -695,11 +726,10 @@ class Game:
     # heals 60% of dur points to weapon
     def weaponrepairtincture(self):
         marqueeprint('[WEAPON REPAIR]')
-        rep = self.ourhero.ourweapon.maxdur * .6
+        rep = int(self.ourhero.ourweapon.maxdur * .6)
         centerprint('You repaired your weapon for ' + str(rep) + ' durability points')
-        self.ourhero.ourweapon.dur += rep
-        if self.ourhero.ourweapon.dur > self.ourhero.ourweapon.maxdur:
-            self.ourhero.ourweapon.dur = self.ourhero.ourweapon.maxdur
+        self.ourhero.ourweapon.restoredur(rep)
+        self.ourhero.applyequip()
         self.ourhero.activeitem = 0
 
     # adds a little suspense to offset the monotony of text input

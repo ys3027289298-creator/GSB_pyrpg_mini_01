@@ -61,12 +61,13 @@ class Armor:
     # damage durability, and check to see if broken
     def damagedur(self, aug, curve):
         self.dur -= int(aug * curve * .1)
+        if self.dur < 0:
+            self.dur = 0
         self.isbroken()
-        pass
 
     # restore dur and check to see if fixed
     def restoredur(self, aug):
-        self.dur += aug
+        self.dur += int(aug)
         if self.dur > self.maxdur:
             self.dur = self.maxdur
         if not self.isbroken():
@@ -77,17 +78,16 @@ class Armor:
         self.defn = self.basedefn
         self.dur = self.maxdur
 
-    # 15% durability = stat reduction
+    # 0 durability = stat reduction
     def isbroken(self):
         if self.dur <= 0:
             self.gearbreak()
             return True
-        elif self.dur > 0:
-            return False
+        return False
 
     # this breaks the gear
     def gearbreak(self):
-        self.atk = int(self.basedefn * .3)
+        self.defn = int(self.basedefn * .3)
 
     # prints all armor info
     def printarmorinfo(self):
