@@ -73,17 +73,19 @@ class Game:
     def newhero(self):
         self.conn.execute('SELECT * FROM levelnotes WHERE level = 1;')
         rows = self.conn.fetchall()
-        marqueeprint('[CHOOSE CLASS]')
-        centerprint('[w]arrior [m]age [h]unter')
-        ourclass = input()
-        if ourclass == 'w' or ourclass == '':
-            ourclass = 'warrior'
-        elif ourclass == 'm':
-            ourclass = 'mage'
-        elif ourclass == 'h':
-            ourclass = 'hunter'
-        else:
-            centerprint('Please enter a valid selection')
+        ourclass = ''
+        while ourclass not in ('warrior', 'mage', 'hunter'):
+            marqueeprint('[CHOOSE CLASS]')
+            centerprint('[w]arrior [m]age [h]unter')
+            classchoice = input()
+            if classchoice == 'w' or classchoice == '':
+                ourclass = 'warrior'
+            elif classchoice == 'm':
+                ourclass = 'mage'
+            elif classchoice == 'h':
+                ourclass = 'hunter'
+            else:
+                centerprint('Please enter a valid selection')
         marqueeprint('[CHOOSE DIFFICULTY]')
         centerprint('[1]easy [2]med [3]hard')
         diff = input()
@@ -162,18 +164,18 @@ class Game:
                 marqueeprint('[FOUND ITEM]')
                 itemrand = random.randrange(0, 6)
                 if itemrand == 0:
-                    self.ourhero.ourarmor = self.ourhero.newarmor()
+                    self.ourhero.equip('armor', self.ourhero.newarmor())
                     gridoutput(self.ourhero.ourarmor.datadict())
                 elif itemrand == 1:
-                    self.ourhero.ourweapon = self.ourhero.newweapon()
+                    self.ourhero.equip('weapon', self.ourhero.newweapon())
                     gridoutput(self.ourhero.ourweapon.datadict())
                 elif itemrand == 2:
-                    self.ourhero.ourshield = self.ourhero.newshield()
+                    self.ourhero.equip('shield', self.ourhero.newshield())
                     gridoutput(self.ourhero.ourshield.datadict())
                 elif 3 <= itemrand <= 6:
                     self.ourhero.ouritem = self.ourhero.newitem()
                     gridoutput(self.ourhero.ouritem.datadict())
-                    self.ourhero.items.append(self.ourhero.ouritem)
+                    self.ourhero.additem(self.ourhero.ouritem)
                 self.ourhero.applyequip()
             elif 90 < ourrand <= 95:
                 marqueeprint('A LONE TRAVELER')
@@ -233,7 +235,13 @@ class Game:
             return
         if not self.ourenemy.isalive():
             self.ourhero.isbattling = False
+            fled = self.ourenemy.fled
             self.ourenemy.reset()
+            if fled:
+                marqueeprint('[ENEMY FLED]')
+                centerprint('Press [Enter] To continue')
+                wait = input()
+                return
             marqueeprint('[VICTORY]')
             self.ourhero.addgold(self.ourenemy.gold + (self.ourenemy.gold * self.ourhero.defcurve))
             self.ourhero.addxp(self.ourenemy.xp + (self.ourenemy.xp * self.ourhero.defcurve))
@@ -302,7 +310,7 @@ class Game:
     # One round of an enemy turn
     def enemyturn(self):
         overunder = random.randrange(0, 20)
-        if self.ourenemy.isalive:
+        if self.ourenemy.isalive():
             marqueeprint('[ENEMY ATTACK]')
             if overunder == 0:
                 self.ourenemy.anger()
@@ -310,7 +318,7 @@ class Game:
                 self.ourenemy.weaker()
             elif overunder == 2:
                 centerprint(str(self.ourenemy.name) + ' ran away!')
-                self.ourenemy.hp = 0
+                self.ourenemy.run()
                 self.ourhero.isbattling = False
                 return
             if overunder in range(3, self.ourhero.dodge):
@@ -443,10 +451,10 @@ class Game:
             gridoutput(self.ourhero.ourarmor.datadict())
             print('')
 
-            # determine weapon costs
-            wepcost = weaponforsale.level * 60 * self.ourhero.defcurve
-            armcost = armorforsale.level * 60 * self.ourhero.defcurve
-            shcost = shieldforsale.level * 60 * self.ourhero.defcurve
+            # determine gear costs
+            wepcost = int(weaponforsale.level * 60 * self.ourhero.defcurve)
+            armcost = int(armorforsale.level * 60 * self.ourhero.defcurve)
+            shcost = int(shieldforsale.level * 60 * self.ourhero.defcurve)
 
             data1 = [str(weaponforsale.name), str(weaponforsale.type),
                      str(weaponforsale.baseatk),
@@ -468,24 +476,25 @@ class Game:
             if itemindex not in ['1', '2', '3', '']:
                 centerprint('Please enter a valid choice')
             elif itemindex == '1':
-                self.ourhero.ourweapon = weaponforsale
-                if self.ourhero.gold < wepcost:
-                    centerprint('You don\'t have enough money!')
-                self.ourhero.gold -= wepcost
-                centerprint('You equip your new gear: ' + str(weaponforsale.name) + ' ' + str(weaponforsale.type))
-            elif itemindex == '2':
-                self.ourhero.ourshield = shieldforsale
                 if self.ourhero.gold < wepcost:
                     centerprint('You don\'t have enough money!')
                     return
-                self.ourhero.gold -= armcost
-                centerprint('You equip your new gear: ' + str(shieldforsale.name) + ' ' + str(shieldforsale.type))
-            elif itemindex == '3':
-                self.ourhero.ourarmor = armorforsale
+                self.ourhero.gold -= wepcost
+                self.ourhero.equip('weapon', weaponforsale)
+                centerprint('You equip your new gear: ' + str(weaponforsale.name) + ' ' + str(weaponforsale.type))
+            elif itemindex == '2':
                 if self.ourhero.gold < shcost:
                     centerprint('You don\'t have enough money!')
                     return
                 self.ourhero.gold -= shcost
+                self.ourhero.equip('shield', shieldforsale)
+                centerprint('You equip your new gear: ' + str(shieldforsale.name) + ' ' + str(shieldforsale.type))
+            elif itemindex == '3':
+                if self.ourhero.gold < armcost:
+                    centerprint('You don\'t have enough money!')
+                    return
+                self.ourhero.gold -= armcost
+                self.ourhero.equip('armor', armorforsale)
                 centerprint('You equip your new gear: ' + str(armorforsale.name) + ' ' + str(armorforsale.type))
             self.ourhero.applyequip()
             return
@@ -557,15 +566,15 @@ class Game:
             print('Your selection? (ENTER to go back)')
             selection = input()
             if selection == '1':
-                self.ourhero.buyitem(item1)
+                self.ourhero.buyitem(item1, int(item1.val * 1.5))
             elif selection == '2':
-                self.ourhero.buyitem(item2)
+                self.ourhero.buyitem(item2, int(item2.val * 1.5))
             elif selection == '3':
-                self.ourhero.buyitem(item3)
+                self.ourhero.buyitem(item3, int(item3.val * 1.5))
             elif selection == '4':
-                self.ourhero.buyitem(item4)
+                self.ourhero.buyitem(item4, int(item4.val * 1.5))
             elif selection == '5':
-                self.ourhero.buyitem(item5)
+                self.ourhero.buyitem(item5, int(item5.val * 1.5))
             elif selection == '':
                 centerprint('\"WHYD YOU COME HERE AND NOT BUY ANYTHING?\"')
                 return
@@ -590,8 +599,14 @@ class Game:
             index = 0
         if index == 'c':
             return
-        index = int(index)
-        ourpickle = open(('./saves/' + str(dirlist[index])), "rb")
+        try:
+            index = int(index)
+            if index < 0:
+                raise IndexError
+            ourpickle = open(('./saves/' + str(dirlist[index])), "rb")
+        except (ValueError, IndexError):
+            centerprint('Please enter a valid choice')
+            return self.ourhero
         ourdata = pickle.load(ourpickle)
         return ourdata
 
@@ -636,16 +651,19 @@ class Game:
             itemindex = input()
             itemindex = int(itemindex)
             itemindex -= 1
-            self.ourhero.ouritem = self.ourhero.items[int(itemindex)]
-            del (self.ourhero.items[int(itemindex)])
+            if itemindex < 0:
+                raise IndexError
+            chosenitem = self.ourhero.items[int(itemindex)]
         except ValueError:
             centerprint('Please enter a valid choice')
             return False
         except IndexError:
             centerprint('Please enter a valid choice')
             return False
-        self.ourhero.activeitem = self.ourhero.ouritem
-        centerprint('Using ' + str(self.ourhero.ouritem.name))
+        self.ourhero.ouritem = chosenitem
+        self.ourhero.activeitem = chosenitem
+        centerprint('Using ' + str(chosenitem.name))
+        itemused = True
         if self.ourhero.ouritem.name == 'Healing Potion':
             self.healingpotion()
         if self.ourhero.ouritem.name == 'Explosive Mana Vial':
@@ -653,13 +671,18 @@ class Game:
                 self.explosivemanavial()
             else:
                 centerprint('You\'re not in battle!')
-                return False
+                itemused = False
         if self.ourhero.ouritem.name == 'Health Regen Potion':
             self.healthregenpotion()
         if self.ourhero.ouritem.name == 'Haste Potion':
             self.hastepotion()
         if self.ourhero.ouritem.name == 'Weapon Repair Tincture':
             self.weaponrepairtincture()
+        if itemused:
+            chosenitem.count -= 1
+            if chosenitem.count <= 0:
+                self.ourhero.items.remove(chosenitem)
+        return False
 
     # hero uses a healing potion
     def healingpotion(self):

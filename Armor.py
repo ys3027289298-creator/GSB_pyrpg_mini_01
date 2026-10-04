@@ -61,6 +61,8 @@ class Armor:
     # damage durability, and check to see if broken
     def damagedur(self, aug, curve):
         self.dur -= int(aug * curve * .1)
+        if self.dur < 0:
+            self.dur = 0
         self.isbroken()
         pass
 
@@ -87,7 +89,7 @@ class Armor:
 
     # this breaks the gear
     def gearbreak(self):
-        self.atk = int(self.basedefn * .3)
+        self.defn = int(self.basedefn * .3)
 
     # prints all armor info
     def printarmorinfo(self):

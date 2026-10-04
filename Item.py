@@ -9,6 +9,8 @@ class Item:
         self.name = itemname
         self.effect = itemeffect
         self.val = itemvalue
+        # stack size when duplicates are collected
+        self.count = 1
 
     # prints all item stats
     def printiteminfo(self):
@@ -24,5 +26,6 @@ class Item:
         return {'Level': str(self.level),
                 'Name': str(self.grade) + ' ' + str(self.name),
                 'Effect': str(self.effect),
-                'Value': str(self.val)
+                'Value': str(self.val),
+                'Count': str(self.count)
                 }

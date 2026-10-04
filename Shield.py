@@ -63,7 +63,9 @@ class Shield:
 
     # damage durability, and check to see if broken
     def damagedur(self, aug, curve):
-        self.dur -= int(aug * curve)
+        self.dur -= int(aug * curve * .1)
+        if self.dur < 0:
+            self.dur = 0
         self.isbroken()
         pass
 
@@ -90,7 +92,7 @@ class Shield:
 
     # this breaks the gear
     def gearbreak(self):
-        self.atk = int(self.basedefn * .3)
+        self.defn = int(self.basedefn * .3)
 
     # prints all info about the shield
     def printshieldinfo(self):

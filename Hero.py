@@ -74,14 +74,42 @@ class Hero:
         self.defcurve = 0
 
         # equip objects
-        self.ourweapon = Weapon.Weapon(0, 'training', 'wooden', 'stick', 3, 20, 'none')
-        self.ourarmor = Armor.Armor(0, 'training', 'broken', 'plate', 2, 10)
-        self.ourshield = Shield.Shield(0, 'training', 'wooden', 'ward', 3, 20)
+        self.ourweapon = self._training_weapon()
+        self.ourarmor = self._training_armor()
+        self.ourshield = self._training_shield()
         self.ouritem = Item.Item(0, 0, 0, 0, 0)
         self.isbattling = False
 
         # width of centered data in screencenter
         self.datawidth = 40
+
+    # fixed training gear used at creation and when unequipping (no random quality)
+    def _training_weapon(self):
+        weapon = Weapon.Weapon(0, 'training', 'wooden', 'stick', 3, 20, 'none')
+        weapon.quality = 'Common'
+        weapon.baseatk = 3
+        weapon.atk = 3
+        weapon.maxdur = 20
+        weapon.dur = 20
+        return weapon
+
+    def _training_armor(self):
+        armor = Armor.Armor(0, 'training', 'broken', 'plate', 2, 10)
+        armor.quality = 'Common'
+        armor.basedefn = 2
+        armor.defn = 2
+        armor.maxdur = 10
+        armor.dur = 10
+        return armor
+
+    def _training_shield(self):
+        shield = Shield.Shield(0, 'training', 'wooden', 'ward', 3, 20)
+        shield.quality = 'Common'
+        shield.basedefn = 3
+        shield.defn = 3
+        shield.maxdur = 20
+        shield.dur = 20
+        return shield
 
     # Heals user up to max health
     def heal(self, hpup):
@@ -147,13 +175,23 @@ class Hero:
         self.gold += int(gainedgold + (gainedgold * self.defcurve))
 
     # attempt to buy an item
-    def buyitem(self, item):
-        if self.canafford(item.val):
-            self.gold -= item.val
-            self.items.append(item)
+    def buyitem(self, item, price=None):
+        if price is None:
+            price = item.val
+        if self.canafford(price):
+            self.gold -= price
+            self.additem(item)
             print('You bought ' + item.name)
         else:
             print('You can\'t afford that!')
+
+    # adds an item to the inventory, stacking with items of the same name
+    def additem(self, item):
+        for owned in self.items:
+            if owned.name == item.name:
+                owned.count += item.count
+                return
+        self.items.append(item)
 
     # see if you can afford an item
     def canafford(self, val):
@@ -321,7 +359,31 @@ class Hero:
         ournewitem = Item.Item(new_item_data[0], new_item_data[1], new_item_data[2], new_item_data[3], new_item_data[4])
         return ournewitem
 
+    # equips a piece of gear into a slot ('weapon', 'armor', or 'shield')
+    def equip(self, slot, gear):
+        if slot == 'weapon':
+            self.ourweapon = gear
+        elif slot == 'armor':
+            self.ourarmor = gear
+        elif slot == 'shield':
+            self.ourshield = gear
+        else:
+            raise ValueError('Unknown gear slot: ' + str(slot))
+        self.applyequip()
+
+    # removes a piece of gear from a slot, falling back to training gear
+    def unequip(self, slot):
+        if slot == 'weapon':
+            self.ourweapon = self._training_weapon()
+        elif slot == 'armor':
+            self.ourarmor = self._training_armor()
+        elif slot == 'shield':
+            self.ourshield = self._training_shield()
+        else:
+            raise ValueError('Unknown gear slot: ' + str(slot))
+        self.applyequip()
+
     # re-equips all gear. Usually called when setting something like self.ourarmor = Armor.Armor(*args)
     def applyequip(self):
-        self.atk = int(self.baseatk + self.ourweapon.baseatk)
+        self.atk = int(self.baseatk + self.ourweapon.atk)
         self.defn = int(self.basedef + self.ourarmor.defn + self.ourshield.defn)

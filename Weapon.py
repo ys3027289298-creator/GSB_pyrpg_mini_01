@@ -56,14 +56,17 @@ class Weapon:
     # damage durability, and check to see if broken
     def damagedur(self, aug, curve):
         self.dur -= int(aug * curve * .1)
+        if self.dur < 0:
+            self.dur = 0
         self.isbroken()
         pass
 
     # restore dur by integer and check to see if fixed
     def restoredur(self, aug):
         self.dur += aug
-        if not self.isbroken():
+        if self.dur > self.maxdur:
             self.dur = self.maxdur
+        if not self.isbroken():
             self.atk = self.baseatk
 
     # restore dur entirely
@@ -80,7 +83,7 @@ class Weapon:
         if self.dur <= 0:
             self.gearbreak()
             return True
-        elif self.dur >= self.maxdur * .15:
+        elif self.dur > 0:
             return False
 
     # prints all weapon stats
